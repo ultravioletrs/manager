@@ -40,7 +40,7 @@ import (
 const (
 	defLogLevel     = "error"
 	defHTTPPort     = "9021"
-	defJaegerURL    = ""
+	defJaegerURL    = "localhost:14268/api/traces"
 	defServerCert   = ""
 	defServerKey    = ""
 	defSecret       = "secret"
@@ -79,9 +79,6 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	managerTracer, managerCloser := initJaeger("manager", cfg.jaegerURL, logger)
-	defer managerCloser.Close()
-
 	libvirtConn := initLibvirt(logger)
 	defer func() {
 		if err := libvirtConn.Disconnect(); err != nil {
@@ -93,13 +90,15 @@ func main() {
 
 	agentTracer, agentCloser := initJaeger("agent", cfg.jaegerURL, logger)
 	defer agentCloser.Close()
-	conn := connectToGrpc("agent", cfg.agentURL, logger)
+	conn := startgRPCClient("agent", cfg.agentURL, logger)
 	agent := agentgrpc.NewClient(agentTracer, conn, cfg.agentTimeout)
 
 	svc := newService(cfg.secret, libvirtConn, idProvider, agent, logger)
-
 	errs := make(chan error, 2)
-	go startgRPCServer(cfg, &svc, logger, errs)
+
+	managerTracer, managerCloser := initJaeger("manager", cfg.jaegerURL, logger)
+	defer managerCloser.Close()
+	go startgRPCServer(cfg, &svc, managerTracer, logger, errs)
 	go startHTTPServer(managerhttpapi.MakeHandler(managerTracer, svc), cfg.httpPort, cfg, logger, errs)
 
 	go func() {
@@ -131,30 +130,6 @@ func loadConfig() config {
 	}
 }
 
-func initJaeger(svcName, url string, logger logger.Logger) (opentracing.Tracer, io.Closer) {
-	if url == "" {
-		return opentracing.NoopTracer{}, ioutil.NopCloser(nil)
-	}
-
-	tracer, closer, err := jconfig.Configuration{
-		ServiceName: svcName,
-		Sampler: &jconfig.SamplerConfig{
-			Type:  "const",
-			Param: 1,
-		},
-		Reporter: &jconfig.ReporterConfig{
-			LocalAgentHostPort: url,
-			LogSpans:           true,
-		},
-	}.NewTracer()
-	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to init Jaeger client: %s", err))
-		os.Exit(1)
-	}
-
-	return tracer, closer
-}
-
 func newService(secret string, libvirtConn *libvirt.Libvirt, idp mainflux.IDProvider, agent agent.AgentServiceClient, logger logger.Logger) manager.Service {
 	svc := manager.New(secret, libvirtConn, idp, agent)
 
@@ -178,6 +153,32 @@ func newService(secret string, libvirtConn *libvirt.Libvirt, idp mainflux.IDProv
 	return svc
 }
 
+func initJaeger(svcName, url string, logger logger.Logger) (opentracing.Tracer, io.Closer) {
+	if url == "" {
+		return opentracing.NoopTracer{}, ioutil.NopCloser(nil)
+	}
+
+	tracer, closer, err := jconfig.Configuration{
+		ServiceName: svcName,
+		Sampler: &jconfig.SamplerConfig{
+			Type:  "const",
+			Param: 1,
+		},
+		Reporter: &jconfig.ReporterConfig{
+			LocalAgentHostPort: url,
+			LogSpans:           true,
+		},
+	}.NewTracer()
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to init Jaeger client: %s", err))
+		os.Exit(1)
+	}
+
+	logger.Info(fmt.Sprintf("Init Jaeger client connection to %s", url))
+
+	return tracer, closer
+}
+
 func startHTTPServer(handler http.Handler, port string, cfg config, logger logger.Logger, errs chan error) {
 	p := fmt.Sprintf(":%s", port)
 	if cfg.serverCert != "" || cfg.serverKey != "" {
@@ -190,9 +191,8 @@ func startHTTPServer(handler http.Handler, port string, cfg config, logger logge
 	errs <- http.ListenAndServe(p, handler)
 }
 
-func startgRPCServer(cfg config, svc *manager.Service, logger logger.Logger, errs chan error) {
+func startgRPCServer(cfg config, svc *manager.Service, tracer opentracing.Tracer, logger logger.Logger, errs chan error) {
 	// Create a gRPC server object
-	tracer := opentracing.GlobalTracer()
 	server := grpc.NewServer()
 	// Register the implementation of the service with the server
 	manager.RegisterManagerServiceServer(server, managergrpc.NewServer(tracer, *svc))
@@ -203,6 +203,20 @@ func startgRPCServer(cfg config, svc *manager.Service, logger logger.Logger, err
 	}
 	logger.Info(fmt.Sprintf("Manager service started using gRPC on address %s", cfg.GRPCAddr))
 	errs <- server.Serve(listener)
+}
+
+func startgRPCClient(name string, url string, logger logger.Logger) *grpc.ClientConn {
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithInsecure())
+
+	conn, err := grpc.Dial(url, opts...)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to connect to %s service: %s", name, err))
+		os.Exit(1)
+	}
+	logger.Info(fmt.Sprintf("connected to %s gRPC server on %s", name, url))
+
+	return conn
 }
 
 func initLibvirt(logger logger.Logger) *libvirt.Libvirt {
@@ -236,18 +250,4 @@ func initLibvirt(logger logger.Logger) *libvirt.Libvirt {
 	}
 
 	return l
-}
-
-func connectToGrpc(name string, url string, logger logger.Logger) *grpc.ClientConn {
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-
-	conn, err := grpc.Dial(url, opts...)
-	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to connect to %s service: %s", name, err))
-		os.Exit(1)
-	}
-	logger.Info(fmt.Sprintf("connected to %s gRPC server on %s", name, url))
-
-	return conn
 }
