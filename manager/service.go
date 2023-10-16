@@ -51,13 +51,11 @@ func (ms *managerService) Run(ctx context.Context, computation []byte) (string, 
 	if err != nil {
 		return "", err
 	}
+
 	// different VM guests can't forward ports to the same ports on the same host
-	ms.qemuCfg.HostFwd1++
-	ms.qemuCfg.NetDevConfig.HostFwd2++
-	ms.qemuCfg.NetDevConfig.HostFwd3++
+	ms.allocFreeHostPorts()
 
 	var res *agent.RunResponse
-
 	err = backoff.Retry(func() error {
 		res, err = ms.agent.Run(ctx, &agent.RunRequest{Computation: computation})
 		return err
@@ -67,4 +65,10 @@ func (ms *managerService) Run(ctx context.Context, computation []byte) (string, 
 		return "", err
 	}
 	return res.Computation, nil
+}
+
+func (ms *managerService) allocFreeHostPorts() {
+	ms.qemuCfg.HostFwd1++
+	ms.qemuCfg.NetDevConfig.HostFwd2++
+	ms.qemuCfg.NetDevConfig.HostFwd3++
 }

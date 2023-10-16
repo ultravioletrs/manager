@@ -227,27 +227,21 @@ We can also check if the `Agent` HTTP `/run` endpoint is running:
 GUEST_ADDR=localhost:9031
 curl -sSi -X POST $GUEST_ADDR/run -H "Content-Type: application/json" -d @- <<EOF
 {
-  "name": "computation_24",
-  "description": "this_computes_the_number_24",
-  "datasets": [
-    "red", "green", "blue", "black", "white", "grey"
-  ],
-  "algorithms": [
-    "toHSV", "toRGB"
-  ],
-  "status": "executed",
-  "owner": "Hector",
-  "dataset_providers": [
-    "Maxi", "Idea", "Lidl"
-  ],
-  "algorithm_providers": [
-    "ETF", "FON", "FTN"
-  ],
+  "name": "Iris Species Classification",
+  "description": "Training a supervised machine learning model to classify Iris species",
+  "datasets": ["Iris Species"],
+  "algorithms": ["Linear regression"],
+  "owner": "Machine Industries Inc.",
+  "dataset_providers": ["SensorTech Solutions", "Machinery Data Systems"],
+  "algorithm_providers": ["AlgoAI Research Labs", "TechBots Innovations"],
   "result_consumers": [
-    "Intesa", "KomBank", "OTP"
+    "MediCorp Solutions",
+    "PharmaTech Innovations",
+    "BioMed University",
+    "HealthSolutions Inc.",
+    "Pharmaceutical Discoveries Ltd."
   ],
-  "ttl": 32,
-  "metadata": {}
+  "ttl": 60
 }
 EOF
 ```
@@ -261,7 +255,7 @@ Content-Type: application/json
 Date: Tue, 05 Sep 2023 12:01:25 GMT
 Content-Length: 493
 
-{"computation":"{\"name\":\"computation_24\",\"description\":\"this_computes_the_number_24\",\"status\":\"executed\",\"owner\":\"Hector\",\"start_time\":\"0001-01-01T00:00:00Z\",\"end_time\":\"0001-01-01T00:00:00Z\",\"datasets\":[\"red\",\"green\",\"blue\",\"black\",\"white\",\"grey\"],\"algorithms\":[\"toHSV\",\"toRGB\"],\"dataset_providers\":[\"Maxi\",\"Idea\",\"Lidl\"],\"algorithm_providers\":[\"ETF\",\"FON\",\"FTN\"],\"result_consumers\":[\"Intesa\",\"KomBank\",\"OTP\"],\"ttl\":32}"}
+{"computation":"b66c44ed744fff1df39cdd1d3042d6352e30665a08a395f53329209fbb666116"}
 ```
 
 We can also check if `Agent` is reachable from the host machine:
@@ -286,27 +280,21 @@ We can also test `Agent's` HTTP `/run` endpoint from the the host machine:
 GUEST_ADDR=localhost:9301
 curl -sSi -X POST $GUEST_ADDR/run -H "Content-Type: application/json" -d @- <<EOF
 {
-  "name": "computation_24",
-  "description": "this_computes_the_number_24",
-  "datasets": [
-    "red", "green", "blue", "black", "white", "grey"
-  ],
-  "algorithms": [
-    "toHSV", "toRGB"
-  ],
-  "status": "executed",
-  "owner": "Hector",
-  "dataset_providers": [
-    "Maxi", "Idea", "Lidl"
-  ],
-  "algorithm_providers": [
-    "ETF", "FON", "FTN"
-  ],
+  "name": "Iris Species Classification",
+  "description": "Training a supervised machine learning model to classify Iris species",
+  "datasets": ["Iris Species"],
+  "algorithms": ["Linear regression"],
+  "owner": "Machine Industries Inc.",
+  "dataset_providers": ["SensorTech Solutions", "Machinery Data Systems"],
+  "algorithm_providers": ["AlgoAI Research Labs", "TechBots Innovations"],
   "result_consumers": [
-    "Intesa", "KomBank", "OTP"
+    "MediCorp Solutions",
+    "PharmaTech Innovations",
+    "BioMed University",
+    "HealthSolutions Inc.",
+    "Pharmaceutical Discoveries Ltd."
   ],
-  "ttl": 32,
-  "metadata": {}
+  "ttl": 60
 }
 EOF
 ```
@@ -326,6 +314,8 @@ mkdir -p /var/log/cocos
 `cd` to the cloned `agent` repo:
 
 ```sh
+export PATH=$PATH:/usr/local/go/bin
+
 # Build the 'agent' executable from the main.go source file and save it as 'build/agent'.
 go build -o build/agent cmd/agent/main.go
 
